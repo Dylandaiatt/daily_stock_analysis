@@ -1,0 +1,104 @@
+name: 每日股票分析
+
+on:
+  # 定时触发 - 每天北京时间 18:00 (UTC 10:00)
+  # 博茨瓦纳时间为 12:00 (UTC+2)
+  schedule:
+    - cron: '0 10 * * 1-5'
+  
+  # 手动触发
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '运行模式'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full          # 完整分析（股票+大盘）
+          - market-only   # 仅大盘复盘
+          - stocks-only   # 仅股票分析
+      force_run:
+        description: '强制运行'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: stock-analysis
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      
+      - name: 设置 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: 安装依赖
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: 创建必要目录
+        run: mkdir -p data logs reports
+      
+      - name: 执行股票分析
+        env:
+          # ==========================================
+          # AI 配置 (使用你提供的 Google AI Key)
+          # ==========================================
+          GEMINI_API_KEY: ${{ secrets.GOOGLE_AI_API_KEY }}
+          GEMINI_MODEL: 'gemini-1.5-flash' # 建议使用稳定版或你指定的模型
+          
+          # ==========================================
+          # 飞书应用配置
+          # ==========================================
+          FEISHU_APP_ID: ${{ secrets.FEISHU_STOCK_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_STOCK_APP_SECRET }}
+          
+          # ==========================================
+          # 股票列表 (优先读取 Secret，没有则用下面的默认值)
+          # ==========================================
+          STOCK_LIST: ${{ secrets.STOCK_LIST || '03692.HK,01801.HK,01530.HK,06160.HK,02126.HK,000423.SZ,000999.SZ,603979.SH,600216.SH,00883.HK,600938.SH,601857.SH,00386.HK,600028.SH,300750.SZ,002594.SZ,09696.HK,600111.SH,06680.HK,300748.SZ,603993.SH,03993.HK,601899.SH,02899.HK,000657.SZ,000408.SZ,600362.SH,000630.SZ,000831.SZ,00769.HK,09868.HK,09880.HK,09660.HK,00820.HK,02498.HK,02525.HK,002920.SZ,603019.SH,002472.SZ,601689.SH,002371.SZ,688981.SH,00981.HK' }}
+          MARKET_REVIEW_REGION: 'cn' # 默认分析 A 股大盘
+          
+          # ==========================================
+          # 系统配置
+          # ==========================================
+          REPORT_TYPE: 'simple'
+          TRADING_DAY_CHECK_ENABLED: 'true'
+          LOG_LEVEL: INFO
+          
+        run: |
+          # 运行分析脚本
+          MODE="${{ github.event.inputs.mode || 'full' }}"
+          FORCE_RUN_ARG=""
+          if [ "${{ github.event.inputs.force_run }}" = "true" ]; then
+            FORCE_RUN_ARG="--force-run"
+          fi
+          
+          if [ "$MODE" = "market-only" ]; then
+            python main.py --market-review $FORCE_RUN_ARG
+          elif [ "$MODE" = "stocks-only" ]; then
+            python main.py --no-market-review $FORCE_RUN_ARG
+          else
+            python main.py $FORCE_RUN_ARG
+          fi
+      
+      - name: 上传分析报告
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stock-analysis-reports
+          path: |
+            reports/
+            logs/
