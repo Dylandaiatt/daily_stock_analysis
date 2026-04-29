@@ -215,65 +215,19 @@ class FeishuSender:
                 logger.error(f"响应内容: {response.text}")
                 return False
 
-        # 不再区分 Flow，统一发 lark_md 交互卡片（Flow 参数是纯文本不支持换行）
-        # 通用交互卡片
-        card_payload = {
-            "msg_type": "interactive",
-            "card": {
-                "config": {"wide_screen_mode": True},
-                "header": {
-                    "title": {
-                        "tag": "plain_text",
-                        "content": "📊 A股智能分析报告"
-                    }
-                },
-                "elements": [
-                    {
-                        "tag": "div",
-                        "text": {
-                            "tag": "lark_md",
-                            "content": content.replace("\\n", "\n")
-                        }
-                    }
-                ]
-            }
-        }
-
-        if _post_payload(card_payload):
-            return True
-
-        # 回退为普通文本消息
-        card_payload = {
-            "msg_type": "interactive",
-            "card": {
-                "config": {"wide_screen_mode": True},
-                "header": {
-                    "title": {
-                        "tag": "plain_text",
-                        "content": "A股智能分析报告"
-                    }
-                },
-                "elements": [
-                    {
-                        "tag": "div",
-                        "text": {
-                            "tag": "lark_md",
-                            "content": content.replace("\\n", "\n")
-                        }
-                    }
-                ]
-            }
-        }
-
-        if _post_payload(card_payload):
-            return True
-
-        # 回退为普通文本消息
-        text_payload = {
-            "msg_type": "text",
-            "content": {
-                "text": prepared_content
-            }
-        }
-
-        return _post_payload(text_payload)
+        # Flow 触发器：发纯文本 content，\n 换行，双换行分隔板块
+        import html
+        clean = html.unescape(prepared_content)
+        # 把 Jinja2 生成的字面量 \n（反斜杠+n）转为真正换行符
+        clean = clean.replace('\\n', '\n')
+        # 板块分隔线上方加空行
+        clean = clean.replace('\n────────\n', '\n\n────────\n\n')
+        # 板块标题 ## 前加空行分隔
+        out_lines = []
+        for line in clean.splitlines():
+            if line.startswith('## ') and out_lines and out_lines[-1].strip():
+                out_lines.append('')
+            out_lines.append(line)
+        clean = '\n'.join(out_lines)
+        flow_payload = {"content": clean}
+        return _post_payload(flow_payload)
