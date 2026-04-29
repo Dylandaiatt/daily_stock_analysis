@@ -1556,13 +1556,19 @@ class AkshareFetcher(BaseFetcher):
 
     def get_main_indices(self, region: str = "cn") -> Optional[List[Dict[str, Any]]]:
         """
-        获取主要指数实时行情 (新浪接口)，仅支持 A 股
+        获取主要指数实时行情
+        - region="cn": A股指数（新浪接口）
+        - region="hk": 港股指数（东方财富港股接口）
         """
-        if region != "cn":
-            return None
         import akshare as ak
 
-        # 主要指数代码映射
+        if region == "hk":
+            return self._get_hk_main_indices(ak)
+
+        if region != "cn":
+            return None
+
+        # A 股指数
         indices_map = {
             'sh000001': '上证指数',
             'sz399001': '深证成指',
@@ -1576,16 +1582,13 @@ class AkshareFetcher(BaseFetcher):
             self._set_random_user_agent()
             self._enforce_rate_limit()
 
-            # 使用 akshare 获取指数行情（新浪财经接口）
             df = ak.stock_zh_index_spot_sina()
 
             results = []
             if df is not None and not df.empty:
                 for code, name in indices_map.items():
-                    # 查找对应指数
                     row = df[df['代码'] == code]
                     if row.empty:
-                        # 尝试带前缀查找
                         row = df[df['代码'].str.contains(code)]
 
                     if not row.empty:
@@ -1595,7 +1598,6 @@ class AkshareFetcher(BaseFetcher):
                         high = safe_float(row.get('最高', 0))
                         low = safe_float(row.get('最低', 0))
 
-                        # 计算振幅
                         amplitude = 0.0
                         if prev_close > 0:
                             amplitude = (high - low) / prev_close * 100
@@ -1617,7 +1619,76 @@ class AkshareFetcher(BaseFetcher):
             return results
 
         except Exception as e:
-            logger.error(f"[Akshare] 获取指数行情失败: {e}")
+            logger.error(f"[Akshare] 获取A股指数行情失败: {e}")
+            return None
+
+    def _get_hk_main_indices(self, ak) -> Optional[List[Dict[str, Any]]]:
+        """获取港股主要指数（恒生、恒生科技、国企指数）"""
+        # 港股主要指数映射：东方财富接口代码
+        hk_indices_map = {
+            '116.HK': '恒生指数',
+            '30.HK': '恒生科技',
+            '43.HK': '国企指数',
+        }
+
+        try:
+            self._set_random_user_agent()
+            self._enforce_rate_limit()
+
+            import time as _time
+            api_start = _time.time()
+            df = ak.stock_hk_spot_em()
+            api_elapsed = _time.time() - api_start
+
+            if df is None or df.empty:
+                logger.warning(f"[Akshare] 港股指数行情为空, 耗时 {api_elapsed:.2f}s")
+                return None
+
+            logger.info(f"[Akshare] 港股指数行情成功: {len(df)} 条, 耗时 {api_elapsed:.2f}s")
+
+            # 东方财富港股实时数据列名
+            results = []
+            for code, name in hk_indices_map.items():
+                # 东方财富港股代码格式: 116.HK
+                row = df[df['代码'] == code]
+                if row.empty:
+                    row = df[df['代码'].str.contains(code.replace('.HK', ''))]
+
+                if not row.empty:
+                    row = row.iloc[0]
+                    current = safe_float(row.get('最新价', 0))
+                    prev_close = safe_float(row.get('昨收', 0))
+                    high = safe_float(row.get('最高', 0))
+                    low = safe_float(row.get('最低', 0))
+                    open_price = safe_float(row.get('今开', 0))
+                    change = safe_float(row.get('涨跌额', 0))
+                    change_pct = safe_float(row.get('涨跌幅', 0))
+                    volume = safe_float(row.get('成交量', 0))
+                    amount = safe_float(row.get('成交额', 0))
+
+                    amplitude = 0.0
+                    if prev_close > 0:
+                        amplitude = (high - low) / prev_close * 100
+
+                    results.append({
+                        'code': code,
+                        'name': name,
+                        'current': current,
+                        'change': change,
+                        'change_pct': change_pct,
+                        'open': open_price,
+                        'high': high,
+                        'low': low,
+                        'prev_close': prev_close,
+                        'volume': volume,
+                        'amount': amount,
+                        'amplitude': amplitude,
+                    })
+
+            return results if results else None
+
+        except Exception as e:
+            logger.error(f"[Akshare] 获取港股指数行情失败: {e}")
             return None
 
     def get_market_stats(self) -> Optional[Dict[str, Any]]:
