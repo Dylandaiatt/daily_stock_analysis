@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 飞书 发送提醒服务
 
@@ -40,6 +41,10 @@ class FeishuSender:
         self._feishu_keyword = (getattr(config, 'feishu_webhook_keyword', None) or '').strip()
         self._feishu_max_bytes = getattr(config, 'feishu_max_bytes', 20000)
         self._webhook_verify_ssl = getattr(config, 'webhook_verify_ssl', True)
+
+    def _is_flow_webhook(self) -> bool:
+        """检测是否为 Flow 自动化触发器 Webhook（格式不同，跳过卡片）"""
+        return bool(self._feishu_url and '/flow/api/trigger-webhook/' in self._feishu_url)
 
     def _get_keyword_prefix(self) -> str:
         """Return the keyword prefix required by Feishu webhook security settings."""
@@ -173,7 +178,7 @@ class FeishuSender:
         return success_count == total_chunks
     
     def _send_feishu_message(self, content: str) -> bool:
-        """发送单条飞书消息（优先使用 Markdown 卡片）"""
+        """发送单条飞书消息（Flow 触发器用文本格式，其他用卡片格式）"""
         prepared_content = self._apply_keyword_prefix(content)
         security_fields = self._build_security_fields()
 
@@ -210,7 +215,17 @@ class FeishuSender:
                 logger.error(f"响应内容: {response.text}")
                 return False
 
-        # 1) 优先使用交互卡片（支持 Markdown 渲染）
+        # Flow 自动化触发器：使用纯文本格式（msg_type=text）
+        if self._is_flow_webhook():
+            flow_payload = {
+                "msg_type": "text",
+                "content": {
+                    "text": prepared_content
+                }
+            }
+            return _post_payload(flow_payload)
+
+        # 普通飞书机器人：优先使用交互卡片（支持 Markdown 渲染）
         card_payload = {
             "msg_type": "interactive",
             "card": {
@@ -236,7 +251,7 @@ class FeishuSender:
         if _post_payload(card_payload):
             return True
 
-        # 2) 回退为普通文本消息
+        # 回退为普通文本消息
         text_payload = {
             "msg_type": "text",
             "content": {
