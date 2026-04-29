@@ -215,33 +215,11 @@ class FeishuSender:
                 logger.error(f"响应内容: {response.text}")
                 return False
 
-        # Flow 自动化触发器：使用 msg_type=post 格式，支持真正换行和分段
+        # Flow 自动化触发器：直接发 content 字段，Flow 里用 trigger_event.body.content 取值
         if self._is_flow_webhook():
-            # 清理模板中的字面量 \n 和 HTML 实体
-            clean_text = prepared_content.replace('\\n', '\n')
-            # 把字面量 \n (反斜杠+n) 替换为真正换行
-            clean_text = clean_text.replace('\\n', '\n')
-            # 移除 HTML 实体编码
             import html
-            clean_text = html.unescape(clean_text)
-
-            # 按换行分段构建 post 格式
-            paragraphs = []
-            for line in clean_text.split('\n'):
-                line = line.strip()
-                if line:
-                    paragraphs.append({"tag": "text", "text": line})
-
-            flow_payload = {
-                "msg_type": "post",
-                "content": {
-                    "post_id": "",
-                    "zh_cn": {
-                        "title": "📊 A股智能分析报告",
-                        "content": paragraphs
-                    }
-                }
-            }
+            clean_text = html.unescape(prepared_content)
+            flow_payload = {"content": clean_text}
             return _post_payload(flow_payload)
 
         # 普通飞书机器人：优先使用交互卡片（支持 Markdown 渲染）
