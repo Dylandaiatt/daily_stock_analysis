@@ -215,26 +215,34 @@ class FeishuSender:
                 logger.error(f"响应内容: {response.text}")
                 return False
 
-        # Flow 自动化触发器：直接发 content 字段，Flow 里用 trigger_event.body.content 取值
-        if self._is_flow_webhook():
-            import html
-            clean_text = html.unescape(prepared_content)
-            # 把字面量 \n 替换为真正换行符
-            clean_text = clean_text.replace('\\n', '\n')
-            # 每个板块分隔线上下各加一个空行，让内容更易读
-            clean_text = clean_text.replace('\n────────\n', '\n\n────────\n\n')
-            # 把独立一行的 ● 列表项前面加空行（板块内分段）
-            lines = clean_text.splitlines()
-            spaced_lines = []
-            for line in lines:
-                if line.startswith('• ') and spaced_lines and spaced_lines[-1].strip() and not spaced_lines[-1].startswith('•'):
-                    spaced_lines.append('')
-                spaced_lines.append(line)
-            clean_text = '\n'.join(spaced_lines)
-            flow_payload = {"content": clean_text}
-            return _post_payload(flow_payload)
+        # 不再区分 Flow，统一发 lark_md 交互卡片（Flow 参数是纯文本不支持换行）
+        # 通用交互卡片
+        card_payload = {
+            "msg_type": "interactive",
+            "card": {
+                "config": {"wide_screen_mode": True},
+                "header": {
+                    "title": {
+                        "tag": "plain_text",
+                        "content": "📊 A股智能分析报告"
+                    }
+                },
+                "elements": [
+                    {
+                        "tag": "div",
+                        "text": {
+                            "tag": "lark_md",
+                            "content": content.replace("\\n", "\n")
+                        }
+                    }
+                ]
+            }
+        }
 
-        # 普通飞书机器人：优先使用交互卡片（支持 Markdown 渲染）
+        if _post_payload(card_payload):
+            return True
+
+        # 回退为普通文本消息
         card_payload = {
             "msg_type": "interactive",
             "card": {
@@ -250,7 +258,7 @@ class FeishuSender:
                         "tag": "div",
                         "text": {
                             "tag": "lark_md",
-                            "content": prepared_content
+                            "content": content.replace("\\n", "\n")
                         }
                     }
                 ]
