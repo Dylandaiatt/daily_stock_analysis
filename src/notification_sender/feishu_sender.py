@@ -216,11 +216,13 @@ class FeishuSender:
                 return False
 
         # Flow 自动化触发器：使用纯文本格式（msg_type=text）
+        # 注意：模板内容中可能有字面量 \n 字符串，需替换为真正换行
         if self._is_flow_webhook():
+            flow_text = prepared_content.replace('\\n', '\n')
             flow_payload = {
                 "msg_type": "text",
                 "content": {
-                    "text": prepared_content
+                    "text": flow_text
                 }
             }
             return _post_payload(flow_payload)
