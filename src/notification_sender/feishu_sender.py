@@ -218,10 +218,8 @@ class FeishuSender:
         # Flow 自动化触发器：直接发 content 字段，Flow 里用 trigger_event.body.content 取值
         if self._is_flow_webhook():
             import html
-            # 处理 HTML 实体和字面量反斜杠+n（模板里 
- 写成字面量）
             clean_text = html.unescape(prepared_content)
-            # 把字面量 \n 替换为真正换行符（字节 0x5C 0x6E → 0x0A）
+            # 把字面量 \n 替换为真正换行符
             clean_text = clean_text.replace('\\n', '\n')
             flow_payload = {"content": clean_text}
             return _post_payload(flow_payload)
