@@ -121,7 +121,7 @@ class MarketAnalyzer:
         self.search_service = search_service
         self.analyzer = analyzer
         self.data_manager = DataFetcherManager()
-        self.region = region if region in ("cn", "us") else "cn"
+        self.region = region if region in ("cn", "us", "hk") else "cn"
         self.profile: MarketProfile = get_profile(self.region)
         self.strategy = get_market_strategy_blueprint(self.region)
 
@@ -131,6 +131,8 @@ class MarketAnalyzer:
         )
         if self.region == "us":
             return "en"
+        if self.region == "hk":
+            return configured
         return configured
 
     def _get_template_review_language(self) -> str:
@@ -144,6 +146,8 @@ class MarketAnalyzer:
             return "US market"
         if review_language == "en":
             return "A-share market"
+        if self.region == "hk":
+            return "港股市场"
         return "A股市场"
 
     def _get_turnover_unit_label(self) -> str:
@@ -158,14 +162,22 @@ class MarketAnalyzer:
             return "N/A"
         if self.region == "us":
             return f"{amount_raw / 1e9:.2f}"
+        if self.region == "hk":
+            # HK turnover from akshare is in HKD, format in 亿港币
+            return f"{amount_raw / 1e8:.0f}"
         if amount_raw > 1e6:
+
             return f"{amount_raw / 1e8:.0f}"
         return f"{amount_raw:.0f}"
 
     def _get_review_title(self, date: str) -> str:
         if self._get_review_language() == "en":
+            if self.region == "hk":
+                return f"## {date} HK Market Recap"
             market_name = "US Market Recap" if self.region == "us" else "A-share Market Recap"
             return f"## {date} {market_name}"
+        if self.region == "hk":
+            return f"## {date} 港股大盘复盘"
         return f"## {date} 大盘复盘"
 
     def _get_index_hint(self) -> str:
@@ -808,6 +820,9 @@ Output the report content directly, no extra commentary.
 - **Leaders**: {top_text or "N/A"}
 - **Laggards**: {bottom_text or "N/A"}
 """
+            if self.region == "hk":
+                market_name = "HK Market Recap"
+            else:
             market_name = "US Market Recap" if self.region == "us" else "A-share Market Recap"
             report = f"""## {overview.date} {market_name}
 
@@ -847,7 +862,7 @@ Market conditions can change quickly. The data above is for reference only and d
 - **领涨**: {top_text}
 - **领跌**: {bottom_text}
 """
-        market_label = "A股" if self.region == "cn" else "美股"
+        market_label = "A股" if self.region == "cn" else ("港股" if self.region == "hk" else "美股")
         strategy_summary = self._get_strategy_markdown_block(template_language)
         return f"""## {overview.date} 大盘复盘
 
