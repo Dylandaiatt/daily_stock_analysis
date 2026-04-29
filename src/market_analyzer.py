@@ -822,8 +822,10 @@ Output the report content directly, no extra commentary.
 """
             if self.region == "hk":
                 market_name = "HK Market Recap"
+            elif self.region == "us":
+                market_name = "US Market Recap"
             else:
-            market_name = "US Market Recap" if self.region == "us" else "A-share Market Recap"
+                market_name = "A-share Market Recap"
             report = f"""## {overview.date} {market_name}
 
 ### 1. Market Summary
