@@ -1,0 +1,17 @@
+model_list:
+  - model_name: nvidia_nim/openai/gpt-oss-120b
+    litellm_params:
+      model: nvidia_nim/openai/gpt-oss-120b
+      api_key: os.environ/OPENAI_API_KEY
+      api_base: os.environ/OPENAI_BASE_URL
+      rpm_config:
+        rpm: 35
+        num_retries: 3
+      timeout: 120
+      max_tokens: 8192
+
+router_settings:
+  routing_strategy: simple-shuffle
+  num_retries: 3
+  allowed_fails: 5
+  cooldown_time: 30
