@@ -216,9 +216,8 @@ class FeishuSender:
                 return False
 
         # Flow 触发器：发纯文本 content，\n 换行，双换行分隔板块
-        import html
-        clean = html.unescape(prepared_content)
-        # 把 Jinja2 生成的字面量 \n（反斜杠+n）转为真正换行符
+        clean = prepared_content
+        # 把字面量 \n（反斜杠+n）转为真正换行符
         clean = clean.replace('\\n', '\n')
         # 板块分隔线上方加空行
         clean = clean.replace('\n────────\n', '\n\n────────\n\n')
