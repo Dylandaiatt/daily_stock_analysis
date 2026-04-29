@@ -215,14 +215,31 @@ class FeishuSender:
                 logger.error(f"响应内容: {response.text}")
                 return False
 
-        # Flow 自动化触发器：使用纯文本格式（msg_type=text）
-        # 注意：模板内容中可能有字面量 \n 字符串，需替换为真正换行
+        # Flow 自动化触发器：使用 msg_type=post 格式，支持真正换行和分段
         if self._is_flow_webhook():
-            flow_text = prepared_content.replace('\\n', '\n')
+            # 清理模板中的字面量 \n 和 HTML 实体
+            clean_text = prepared_content.replace('\\n', '\n')
+            # 把字面量 \n (反斜杠+n) 替换为真正换行
+            clean_text = clean_text.replace('\\n', '\n')
+            # 移除 HTML 实体编码
+            import html
+            clean_text = html.unescape(clean_text)
+
+            # 按换行分段构建 post 格式
+            paragraphs = []
+            for line in clean_text.split('\n'):
+                line = line.strip()
+                if line:
+                    paragraphs.append({"tag": "text", "text": line})
+
             flow_payload = {
-                "msg_type": "text",
+                "msg_type": "post",
                 "content": {
-                    "text": flow_text
+                    "post_id": "",
+                    "zh_cn": {
+                        "title": "📊 A股智能分析报告",
+                        "content": paragraphs
+                    }
                 }
             }
             return _post_payload(flow_payload)
