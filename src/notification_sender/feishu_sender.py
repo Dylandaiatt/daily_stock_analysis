@@ -221,6 +221,16 @@ class FeishuSender:
             clean_text = html.unescape(prepared_content)
             # 把字面量 \n 替换为真正换行符
             clean_text = clean_text.replace('\\n', '\n')
+            # 每个板块分隔线上下各加一个空行，让内容更易读
+            clean_text = clean_text.replace('\n────────\n', '\n\n────────\n\n')
+            # 把独立一行的 ● 列表项前面加空行（板块内分段）
+            lines = clean_text.splitlines()
+            spaced_lines = []
+            for line in lines:
+                if line.startswith('• ') and spaced_lines and spaced_lines[-1].strip() and not spaced_lines[-1].startswith('•'):
+                    spaced_lines.append('')
+                spaced_lines.append(line)
+            clean_text = '\n'.join(spaced_lines)
             flow_payload = {"content": clean_text}
             return _post_payload(flow_payload)
 
